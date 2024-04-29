@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "etiquetado"
+version = "0.1.0"
+classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
+description = "etiquetado is a Python library, with apps to annotate and convert data when it is created."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "echemdbconverters>=0.2.0,<0.3.0",
+    "ipykernel",
+    "ipywidgets",
+    "pandas>=2,<3",
+    "pypandoc",
+    "unitpackage>=0.8.4,<0.9.0",
+    "voila",
+    "watchdog",
+]
+
+[tool.setuptools]
+packages = [
+    "etiquetado_voila",
+    "etiquetado_voila.api",
+    "etiquetado_voila.apps",
+]
+
+
+

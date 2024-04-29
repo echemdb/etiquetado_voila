@@ -1,0 +1,6 @@
+*__pycache__
+
+doc/files/data_exported
+doc/files/data2
+doc/files/data
+*.ipynb_checkpoints/
