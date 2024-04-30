@@ -5,19 +5,19 @@ from pathlib import Path
 
 class FileCreationHandler(FileSystemEventHandler):
 
-    def __init__(self, *file_processing_methods, suffix=".csv"):
-        r"""``*file_processing_methods`` are python methods which interact and process
+    def __init__(self, *processing_callbacks, suffix=".csv"):
+        r"""``*processing_callbacks`` are python methods which interact and process
         newly created files with the specified ``suffix`` detected by watchdog."""
         self.suffix = suffix
-        self.file_processing_methods = file_processing_methods
+        self.processing_callbacks = processing_callbacks
 
     def on_created(self, event):
         if Path(event.src_path).suffix == self.suffix:
             filename = event.src_path
             # When a new file is created we catch the filename and parse it to a method
             # to generate, for example, output yaml files and markdown files containing additional notes
-            for method in self.file_processing_methods:
-                method(filename)
+            for method in self.processing_callbacks:
+                method(filename=filename)
 
 
 class FileObserver:
@@ -35,7 +35,7 @@ class FileObserver:
     def observed_dir(self):
         return self._observed_dir
 
-    def process_tagged_file(self, filename):
+    def processing_callbacks(self, filename):
         return print(filename)
 
     def create_observer(self):
@@ -44,7 +44,7 @@ class FileObserver:
         from etiquetado_voila.api.handler import FileCreationHandler
 
         self.observer.schedule(
-            FileCreationHandler(self.process_tagged_file, suffix=self.suffix),
+            FileCreationHandler(self.processing_callbacks, suffix=self.suffix),
             self.observed_dir,
             recursive=False,
         )

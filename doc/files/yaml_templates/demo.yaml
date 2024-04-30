@@ -1,0 +1,5 @@
+user: Max Doe
+temperature:
+  unit: K
+  value: 500
+system: foo
