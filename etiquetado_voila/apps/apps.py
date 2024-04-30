@@ -197,3 +197,44 @@ class AutoQuetado(FileObserverSelectorApp, TemplateSelector):
     def gui(self):
         with self.output:
             return self.layout()
+
+class AutoQuetadoMetadata(AutoQuetado):
+
+    def __init__(self, observed_dir, suffix='.csv', template_dir='./files/yaml_templates/', template_suffix='.yaml', metadata_defaults=None):
+
+        self._metadata_defaults = metadata_defaults
+
+        self.output = widgets.Output()
+
+        AutoQuetado.__init__(self, observed_dir, suffix, template_dir, template_suffix=template_suffix)
+
+        self.metadata_text_fields = [widgets.Text(description=key, value=value, continuous_update=False) for key, value in metadata_defaults.items()]
+        # Restart observer for any kind of Text widget input change
+        for text in self.metadata_text_fields:
+            text.observe(self.on_text_value_change, names="value")
+
+    @property
+    def mds_textfields(self):
+        # This definately needs another name or other approach
+        return {field.description: field.value for field in self.metadata_text_fields}
+
+    def layout_metadata(self):
+        return VBox(children=[field for field in self.metadata_text_fields])
+
+    def extend_metadata(self, metadata):
+        _metadata = super().extend_metadata(metadata)
+        _metadata['user'] = self.mds_textfields['user']
+        return _metadata
+
+
+    def metagui(self):
+        # tabs = {'Observer':self.layout, 'Default Metadata': self.layout_metadata}
+        tab = widgets.Tab()
+        # tab.children([[],self.layout_metadata])
+        # tab_contents = ['P0', 'P1', 'P2', 'P3', 'P4']
+        # children = [widgets.Text(description=name) for name in tab_contents]
+        tab.children = [self.layout(), self.layout_metadata()]
+
+        tab.titles = ['Observer', 'Default Metadata']
+        with self.output:
+            return tab
