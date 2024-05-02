@@ -9,6 +9,22 @@ from etiquetado_voila.api.handler import FileObserver
 
 from ipywidgets import widgets, HBox, VBox, Layout
 
+class Output:
+
+    def __init__(self):
+
+        self.widget_output = widgets.Output()
+        self.text_output = widgets.Output()
+
+    def layout(self):
+
+        return self.text_output
+
+    def gui(self):
+        with self.widget_output:
+            return self.layout
+
+
 class FileObserverApp(FileObserver):
 
     def __init__(self, observed_dir=".", suffix=".csv"):
