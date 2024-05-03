@@ -6,8 +6,14 @@ import time
 from pathlib import Path
 
 from etiquetado_voila.api.handler import FileObserver
+from etiquetado_voila.apps.pieces import ListOptions
 
 from ipywidgets import widgets, HBox, VBox, Layout
+
+import ipyvuetify as v
+
+# Create an ipyvuetify widget (e.g., a button)
+
 
 class FileObserverApp(FileObserver):
 
@@ -16,11 +22,13 @@ class FileObserverApp(FileObserver):
         FileObserver.__init__(self, observed_dir=observed_dir, suffix=suffix)
 
         # buttons
-        self.button_start = widgets.Button(description="Start watching")
+        # self.button_start = widgets.Button(description="Start watching")
+        self.button_start = v.Btn(color='primary', children=["Start watching"])
         self.button_stop = widgets.Button(description="Stop watching")
 
         # button interactions
-        self.button_start.on_click(self.on_start)
+        # self.button_start.on_click(self.on_start)
+        self.button_start.on_event('click', self.on_start)
         self.button_stop.on_click(self.on_stop)
 
         # Status indicator
@@ -238,3 +246,52 @@ class AutoQuetadoMetadata(AutoQuetado):
         tab.titles = ['Observer', 'Default Metadata']
         with self.output:
             return tab
+
+class AutoQuetadoConverter(AutoQuetadoMetadata, ListOptions):
+
+    def __init__(self, observed_dir, suffix='.csv', template_dir='./files/yaml_templates/', template_suffix='.yaml', metadata_defaults=None, outdir_converted='./files/data_converted/'):
+        AutoQuetadoMetadata.__init__(self, observed_dir=observed_dir, suffix=suffix, template_dir=template_dir, template_suffix=template_suffix, metadata_defaults=metadata_defaults)
+        self.list_options = ListOptions(list_name='Tagged Files')
+        self.outdir_converted = outdir_converted
+
+        self.app_output = widgets.Output()
+        self.output = widgets.Output()
+
+        self.button_convert_files = widgets.Button(description='Convert selected files')
+        self.button_convert_files.on_click(self.on_convert_files)
+
+    def convert_file(self, filename):
+        from echemdbconverters.csvloader import CSVloader
+        from unitpackage.entry import Entry
+        from pathlib import Path
+        import yaml
+        file = Path(filename)
+        with open(file.with_suffix('.csv.yaml')) as f:
+            metadata = yaml.load(f, Loader=yaml.SafeLoader)
+        loaded = CSVloader(open(filename, 'r'))
+
+        entry = Entry.from_df(loaded.df, basename=file.stem, metadata=metadata)
+        entry.save(outdir=self.outdir_converted)
+
+    def on_convert_files(self, *args):
+        for filename in self.list_options.option_selector.value:
+            self.convert_file(filename=filename)
+        # the filenames must be removed from the selector after the conversion
+        # otherwise the above loop will break
+        for filename in self.list_options.option_selector.value:
+            self.list_options.remove_option(filename)
+
+    def processing_callbacks(self, filename):
+        return print(filename), self.append_metadata(filename=filename), self.list_options.add_option(filename)
+
+    def conv_gui(self):
+        tab = widgets.Tab()
+        converter = VBox(children=[self.list_options.option_selector, self.button_convert_files])
+
+        tab.children = [self.layout(), self.layout_metadata(), converter]
+
+        tab.titles = ['Observer', 'Default Metadata', 'Convert Files']
+        layout = VBox(children=[tab, self.output])
+        with self.app_output:
+            return layout
+
