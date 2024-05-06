@@ -41,22 +41,13 @@ class FileObserverApp:
             callbacks=self.callbacks,
         )
 
-        # TODO: Merge all buttons and indicators into a single start/stop button, which changes colo
-        # buttons
-        self.button_stop = widgets.Button(description="Stop watching")
-        self.button_stop.on_click(self.on_stop)
-
-        # demo ipyvuetifiy button
-        # self.button_start = v.Btn(color='primary', children=["Start watching"])
-        # self.button_start.on_event('click', self.on_start)
-        # ipywidgets button
-        self.button_start = widgets.Button(description="Start watching")
-        self.button_start.on_click(self.on_start)
-
-        # Status indicator
-        self.indicator = widgets.Button(description="Offline")
-        self.indicator.style.button_color = "red"
-        self.indicator.style.text_color = "black"
+        # # demo ipyvuetifiy button
+        # # self.button_start = v.Btn(color='primary', children=["Start watching"])
+        # # self.button_start.on_event('click', self.on_start)
+        self.button_start_stop = widgets.Button(description="Stop watching")
+        self.button_start_stop.style.button_color = "red"
+        self.button_start_stop.style.text_color = "black"
+        self.button_start_stop.on_click(self.on_start_stop)
 
         # output
         self._output = output or widgets.Output()
@@ -77,13 +68,22 @@ class FileObserverApp:
 
     def on_stop(self, *args):
         self.fileobserver.stop()
-        self.indicator.style.button_color = "red"
-        self.indicator.description = "Offline"
+        self.button_start_stop.style.button_color = "red"
+        self.button_start_stop.style.text_color = "black"
+        self.button_start_stop.description = "Start watching"
 
     def on_start(self, *args):
         self.fileobserver.start()
-        self.indicator.style.button_color = "lightgreen"
-        self.indicator.description = "Watching"
+        self.button_start_stop.style.button_color = "lightgreen"
+        self.button_start_stop.description = "Watching"
+        self.button_start_stop.description = "Stop watching"
+
+    def on_start_stop(self, *args):
+        if self.fileobserver.observer:
+            if self.fileobserver.observer.is_alive():
+                self.on_stop()
+        else:
+            self.on_start()
 
     def restart(self):
         self.on_stop()
@@ -93,9 +93,9 @@ class FileObserverApp:
         selectors = VBox(
             children=[self.text_box_folder_path, self.text_box_file_suffix]
         )
-        buttons = HBox(children=[self.button_start, self.button_stop])
-        indicator = HBox(children=[self.indicator])
-        return VBox(children=[selectors, buttons, indicator])
+        # buttons = HBox(children=[self.button_start, self.button_stop])
+        # indicator = HBox(children=[self.indicator])
+        return VBox(children=[selectors, self.button_start_stop])
 
     def gui(self):
         with self.output:
