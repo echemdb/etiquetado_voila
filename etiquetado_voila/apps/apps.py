@@ -37,6 +37,7 @@ class FileObserverApp:
         # Homebrew widgets
         self.fileobserver = FileObserver(observed_dir=self.observed_dir, suffix=self._suffix, callbacks=self.callbacks)
 
+        # TODO: Merge all buttons and indicators into a single start/stop button, which changes colo
         # buttons
         self.button_stop = widgets.Button(description="Stop watching")
         self.button_stop.on_click(self.on_stop)
@@ -196,15 +197,15 @@ class AutoQuetadoMetadata(AutoQuetado):
     # such that the most commonly changed variables in the metadata template
     # can be updated in the GUI.
 
-    def __init__(self, observed_dir, suffix='.csv', template_dir='./files/yaml_templates/', template_suffix='.yaml', metadata_defaults=None):
+    def __init__(self, observed_dir=None, suffix='.csv', template_dir='./files/yaml_templates/', template_suffix='.yaml', metadata_defaults=None):
 
         self._metadata_defaults = metadata_defaults
 
         # self.output = widgets.Output()
 
-        AutoQuetado.__init__(self, observed_dir, suffix, template_dir, template_suffix=template_suffix)
+        AutoQuetado.__init__(self, observed_dir=observed_dir, suffix=suffix, template_dir=template_dir, template_suffix=template_suffix)
 
-        self.metadata_text_fields = [widgets.Text(description=key, value=value, continuous_update=False) for key, value in metadata_defaults.items()]
+        self.metadata_text_fields = [widgets.Text(description=key, value=value, continuous_update=False) for key, value in self._metadata_defaults.items()]
         # Restart observer for any kind of Text widget input change
         for text in self.metadata_text_fields:
             text.observe(self.foa.on_text_value_change, names="value")
@@ -212,6 +213,7 @@ class AutoQuetadoMetadata(AutoQuetado):
     @property
     def mds_textfields(self):
         # This definitely needs another name or other approach
+        # returns the name/description of the text fields and the current values
         return {field.description: field.value for field in self.metadata_text_fields}
 
     def extend_metadata(self, metadata):
