@@ -26,7 +26,7 @@ class FileObserverApp:
 
         # input widgets
         self.text_box_folder_path = widgets.Text(
-            description="folder path", value=self.observed_dir, continuous_update=False
+            description="folder path", value=self.observed_dir, continuous_update=False,
         )
         self.text_box_file_suffix = widgets.Text(
             description="file suffix", value=self._suffix, continuous_update=False
@@ -102,7 +102,7 @@ class FileObserverApp:
 
 
 class MetadataApp:
-
+    # This has to be cleaned and seems useless...
     def __init__(
         self,
         template_dir,
@@ -112,9 +112,10 @@ class MetadataApp:
         self._template_dir = template_dir
         self._template_suffix = template_suffix
 
-        self.yaml_templates = glob.glob(os.path.join(self._template_dir, "**.yaml"))
+        self.yaml_templates = glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))
         self.dropdown_yaml = widgets.Dropdown(
-            description="Yaml templates", options=self.yaml_templates
+            description="Yaml templates", options=self.yaml_templates,
+            layout=Layout(width="400px", flex="flex-grow")
         )
 
         self.output = widgets.Output()
@@ -156,13 +157,6 @@ class MetadataApp:
         # are created in the templates folder
         pass
 
-    def metadata_app_layout(self):
-        return self.dropdown_yaml
-
-    def gui(self):
-        with self.output:
-            return self.metadata_app_layout()
-
 
 class AutoQuetado:
 
@@ -171,7 +165,8 @@ class AutoQuetado:
         observed_dir,
         suffix,
         template_dir,
-        metadata_defaults=None,
+        update_metadata=None, # method that changes metadata received from YAML or adds new metadata
+        variable_metadata=None,
         template_suffix=".yaml",
         callbacks=None,
     ):
@@ -182,7 +177,8 @@ class AutoQuetado:
         self._observed_dir = observed_dir
         self._suffix = suffix
         self._callbacks = callbacks
-        self._metadata_defaults = metadata_defaults
+        self._update_metadata = update_metadata
+        self._variable_metadata = variable_metadata
         self.output = widgets.Output()
 
         self.foa = FileObserverApp(
@@ -197,38 +193,44 @@ class AutoQuetado:
         self.metadata_app.dropdown_yaml.observe(
             self.foa.on_text_value_change, names="value"
         )
-        if self._metadata_defaults:
+
+        self.metadata_text_fields = None
+
+        if self._variable_metadata:
             self.metadata_text_fields = [
                 widgets.Text(description=key, value=value, continuous_update=False)
-                for key, value in self._metadata_defaults.items()
+                for key, value in self._variable_metadata.items()
             ]
             for text in self.metadata_text_fields:
                 text.observe(self.foa.on_text_value_change, names="value")
 
     @property
-    def mds_textfields(self):
-        # This definitely needs another name or other approach
+    def variable_metadata(self):
         # returns the name/description of the text fields and the current values
-        return {field.description: field.value for field in self.metadata_text_fields}
+        return {text_field.description: text_field.value for text_field in self.metadata_text_fields}
 
-    def extend_metadata(self, metadata, filename):
+    def update_metadata(self, metadata, filename):
+        if self._update_metadata:
+            return self._update_metadata(metadata=metadata, filename=filename)
+
         metadata.setdefault(
             "time metadata", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         )
         metadata.setdefault("filename", filename)
-        if self._metadata_defaults:
-            for key, item in self.mds_textfields.items():
+        if self._variable_metadata:
+            for key, item in self.variable_metadata.items():
                 metadata[key] = item
         return metadata
 
-    def append_metadata(self, filename):
+    def tag_data(self, filename):
         # load the metadata from a yaml template
         with open(self.metadata_app.template_filename, "rb") as f:
             _metadata = yaml.load(f, Loader=yaml.SafeLoader)
 
-        metadata = self.extend_metadata(metadata=_metadata, filename=filename)
+        metadata = self.update_metadata(metadata=_metadata, filename=filename)
 
         outyaml = Path(filename).with_suffix(f"{self.foa.suffix}.yaml")
+
         with open(outyaml, "w", encoding="utf-8") as f:
             yaml.dump(metadata, f)
 
@@ -240,7 +242,7 @@ class AutoQuetado:
         def print_filename(filename):
             return print(filename)
 
-        return [print_filename, self.append_metadata]
+        return [print_filename, self.tag_data]
 
     def tag(self, filename):
         for callback in self.callbacks():
@@ -249,24 +251,29 @@ class AutoQuetado:
     def layout_metadata(self):
         return VBox(children=[field for field in self.metadata_text_fields])
 
-    def layout_simple(self):
+    def layout_observer(self):
         return VBox(
             children=[self.metadata_app.dropdown_yaml, self.foa.observer_layout()]
         )
 
+    def basic_gui(self):
+        tab = widgets.Tab()
+        tab.children = [self.layout_observer()]
+        tab.titles = ["Observer"]
+
     def metadata_gui(self):
         tab = widgets.Tab()
-        tab.children = [self.layout_simple(), self.layout_metadata()]
-        tab.titles = ["Observer", "Default Metadata"]
+        tab.children = [self.layout_observer(), self.layout_metadata()]
+        tab.titles = ["Observer", "Variable Metadata"]
 
         with self.output:
             return tab
 
     def gui(self):
-        if self._metadata_defaults:
+        if self.metadata_text_fields:
             return self.metadata_gui()
         with self.output:
-            return self.layout_simple()
+            return self.basic_gui()
 
 
 class AutoQuetadoConverter(AutoQuetado):
@@ -277,12 +284,15 @@ class AutoQuetadoConverter(AutoQuetado):
         suffix=".csv",
         template_dir="./files/yaml_templates/",
         template_suffix=".yaml",
-        metadata_defaults=None,
+        update_metadata=None,
+        variable_metadata=None,
+        converter = None,
         outdir_converted="./files/data_converted/",
         callbacks=None,
     ):
 
         self._callbacks = callbacks
+        self._converter = converter
         self.list_options = ListOptions(list_name="Tagged Files")
 
         AutoQuetado.__init__(
@@ -291,29 +301,36 @@ class AutoQuetadoConverter(AutoQuetado):
             suffix=suffix,
             template_dir=template_dir,
             template_suffix=template_suffix,
-            metadata_defaults=metadata_defaults,
+            update_metadata=update_metadata,
+            variable_metadata=variable_metadata,
         )
         self.outdir_converted = outdir_converted
 
         self.app_output = widgets.Output()
         self.output = widgets.Output()
 
-        self.button_convert_files = widgets.Button(description="Convert selected files")
+        self.button_convert_files = widgets.Button(description="Export & convert selected files")
         self.button_convert_files.on_click(self.on_convert_files)
 
-    def convert_file(self, filename):
+    def base_converter(self, filename, metadata_suffix, outdir):
         from echemdbconverters.csvloader import CSVloader
         from unitpackage.entry import Entry
         from pathlib import Path
         import yaml
 
         file = Path(filename)
-        with open(file.with_suffix(".csv.yaml")) as f:
+        with open(file.with_suffix(metadata_suffix)) as f:
             metadata = yaml.load(f, Loader=yaml.SafeLoader)
         loaded = CSVloader(open(filename, "r"))
 
         entry = Entry.from_df(loaded.df, basename=file.stem, metadata=metadata)
-        entry.save(outdir=self.outdir_converted)
+        entry.save(outdir=outdir)
+
+    def convert_file(self, filename):
+        if self._converter:
+            return self._converter(filename)
+        self.base_converter(filename, metadata_suffix=".csv.yaml", outdir=self.outdir_converted)
+
 
     def on_convert_files(self, *args):
         for filename in self.list_options.option_selector.value:
@@ -332,7 +349,7 @@ class AutoQuetadoConverter(AutoQuetado):
             with self.output:
                 return print(filename)
 
-        return [print_filename, self.append_metadata, self.list_options.add_option]
+        return [print_filename, self.tag_data, self.list_options.add_option]
 
     def layout_converter(self):
         return VBox(
@@ -340,15 +357,28 @@ class AutoQuetadoConverter(AutoQuetado):
         )
 
     def gui(self):
+        if self._variable_metadata:
+            tab = widgets.Tab()
+
+            tab.children = [
+                self.layout_observer(),
+                self.layout_metadata(),
+                self.layout_converter(),
+            ]
+
+            tab.titles = ["Observer", "Variable Metadata", "Convert Files"]
+            layout = VBox(children=[tab, self.output])
+            with self.app_output:
+                return layout
+
         tab = widgets.Tab()
 
         tab.children = [
-            self.layout_simple(),
-            self.layout_metadata(),
+            self.layout_observer(),
             self.layout_converter(),
         ]
 
-        tab.titles = ["Observer", "Default Metadata", "Convert Files"]
+        tab.titles = ["Observer", "Convert Files"]
         layout = VBox(children=[tab, self.output])
         with self.app_output:
             return layout
