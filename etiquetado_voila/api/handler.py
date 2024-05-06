@@ -68,7 +68,7 @@ class FileObserver:
 
     def stop(self):
         if self.observer is None:
-            print('observer not running')
+            print("observer not running")
         else:
             self.observer.stop()
             self.observer.join()
