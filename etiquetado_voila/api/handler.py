@@ -22,10 +22,11 @@ class FileCreationHandler(FileSystemEventHandler):
 
 class FileObserver:
 
-    def __init__(self, observed_dir=".", suffix=".csv"):
+    def __init__(self, observed_dir=".", suffix=".csv", callbacks=None):
         self._observed_dir = observed_dir
         self._suffix = suffix
         self.observer = None
+        self.callbacks = callbacks
 
     @property
     def suffix(self):
@@ -36,7 +37,9 @@ class FileObserver:
         return self._observed_dir
 
     def processing_callbacks(self, filename):
-        return print(filename)
+        if self.callbacks == None:
+            return print(filename)
+        return [callback(filename) for callback in self.callbacks]
 
     def create_observer(self):
         self.observer = Observer()
@@ -48,7 +51,6 @@ class FileObserver:
             self.observed_dir,
             recursive=False,
         )
-
         print("observer created")
 
     def start(self):
@@ -65,7 +67,10 @@ class FileObserver:
             )
 
     def stop(self):
-        self.observer.stop()
-        self.observer.join()
-        self.observer = None
-        print("Stop watching")
+        if self.observer is None:
+            print('observer not running')
+        else:
+            self.observer.stop()
+            self.observer.join()
+            self.observer = None
+            print("Stopped watching")
