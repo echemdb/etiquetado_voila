@@ -9,28 +9,33 @@ from etiquetado_voila.api.handler import FileObserver
 
 from ipywidgets import widgets, HBox, VBox, Layout
 
+
 class ListOptions:
     r"""Keep the content of a selection widget up to date with content in a file.
     This allows storing the state of the widget in, for example, yaml file
     when you want to pick up the work at a later stage.
     """
 
-    def __init__(self, option_selector=None, defaults_file='tagger_defaults.yaml', list_name=None):
+    def __init__(
+        self, option_selector=None, defaults_file="tagger_defaults.yaml", list_name=None
+    ):
 
         self._defaults_file = defaults_file
         self.list_name = list_name or self.__class__.__name__
 
         self.option_selector = option_selector or widgets.SelectMultiple(
-            options=(''),
-            description=f'{self.list_name}')
+            options=(""),
+            description=f"{self.list_name}",
+            layout=Layout(width="600px", height="180px", flex="flex-grow"),
+        )
 
         self.sync_options()
 
     @property
     def defaults_file(self):
         if not os.path.exists(self._defaults_file):
-            with open(self._defaults_file, 'w') as f:
-                f.write(f'{self.list_name}: []\n')
+            with open(self._defaults_file, "w") as f:
+                f.write(f"{self.list_name}: []\n")
         return self._defaults_file
 
     def add_option(self, option):
@@ -47,7 +52,7 @@ class ListOptions:
         file_metadata = self.file_metadata
         file_metadata[self.list_name] = options
         # tagged = {self.list_name: options}
-        with open(self.defaults_file, 'w') as f:
+        with open(self.defaults_file, "w") as f:
             yaml.dump(file_metadata, f)
 
     def sync_options(self):
@@ -61,7 +66,7 @@ class ListOptions:
 
     @property
     def file_metadata(self):
-        with open(self.defaults_file, 'rb') as f:
+        with open(self.defaults_file, "rb") as f:
             file_metadata = yaml.load(f, Loader=yaml.SafeLoader)
         return file_metadata
 
@@ -69,20 +74,3 @@ class ListOptions:
         metadata = self.file_metadata
         metadata.setdefault(self.list_name, [])
         return metadata[self.list_name]
-
-
-
-class ConvertButton:
-
-    def __init__(self) -> None:
-        self.button_convert_files.on_click(self.on_convert_files)
-
-    def convert_file(self, filename):
-        from converter import BilogicPeisMPT
-        loaded = BilogicPeisMPT(filename)
-        loaded.convert(outdir=self.outdir)
-
-    def on_convert_files(self, *args):
-        for filename in self.tagged_files.value:
-            self.convert_file(filename=filename)
-        self.remove_tagged_files()
