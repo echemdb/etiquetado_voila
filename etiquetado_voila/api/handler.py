@@ -51,7 +51,6 @@ class FileObserver:
             self.observed_dir,
             recursive=False,
         )
-        print("observer created")
 
     def start(self):
         if self.observer is None:
