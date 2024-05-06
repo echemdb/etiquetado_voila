@@ -98,9 +98,9 @@ class FileObserverApp:
             return self.observer_layout()
 
 
-class TemplateSelector():
+class MetadataApp:
 
-    def __init__(self, template_dir, template_suffix='.yaml'):
+    def __init__(self, template_dir, template_suffix='.yaml', ):
 
         self._template_dir = template_dir
         self._template_suffix = template_suffix
@@ -117,7 +117,7 @@ class TemplateSelector():
         return self._template_dir
 
     @property
-    def yaml_template(self):
+    def template_filename(self):
         return self.dropdown_yaml.value
 
     @property
@@ -125,47 +125,82 @@ class TemplateSelector():
         # might as well be stored in a widget
         return self._template_suffix
 
+    @property
+    def _metadata(self):
+        with open(self.template_filename, 'rb') as f:
+            metadata = yaml.load(f, Loader=yaml.SafeLoader)
+
+        return metadata
+
+    def metadata(self):
+        _metadata = self._metadata
+        # update _metadata with fields from other schema
+        return _metadata
+
+    def store_metadata(self, outyaml):
+        # outyaml = Path(self.filename).with_suffix(f'{self.foa.suffix}.yaml')
+        # outyaml = Path(self.filename).with_suffix(self.output_suffix)
+        with open(outyaml, 'w', encoding='utf-8') as f:
+            yaml.dump(self.metadata, f)
+
     def update_template_list(self):
         # Update the dropdown list when new templates
         # are created in the templates folder
         pass
 
-    def template_selector_layout(self):
+    def metadata_app_layout(self):
         return self.dropdown_yaml
 
     def gui(self):
         with self.output:
-            return self.template_selector_layout()
+            return self.metadata_app_layout()
 
 
 class AutoQuetado:
 
-    def __init__(self, observed_dir, suffix, template_dir, template_suffix='.yaml'):
+    def __init__(self, observed_dir, suffix, template_dir, metadata_defaults=None, template_suffix='.yaml', callbacks=None):
 
         self._template_dir = template_dir
         self._template_suffix = template_suffix
 
         self._observed_dir = observed_dir
         self._suffix = suffix
+        self._callbacks = callbacks
+        self._metadata_defaults = metadata_defaults
         self.output = widgets.Output()
 
+
+
         self.foa = FileObserverApp(
-            observed_dir=self._observed_dir, suffix=self._suffix, callbacks=self.callbacks()
+            observed_dir=self._observed_dir, suffix=self._suffix, callbacks=callbacks or self.callbacks()
         )
-        self.template_selector = TemplateSelector(
+        self.metadata_app = MetadataApp(
             template_dir=self._template_dir, template_suffix=self._template_suffix
         )
 
-        self.template_selector.dropdown_yaml.observe(self.foa.on_text_value_change, names="value")
+        self.metadata_app.dropdown_yaml.observe(self.foa.on_text_value_change, names="value")
+        if self._metadata_defaults:
+            self.metadata_text_fields = [widgets.Text(description=key, value=value, continuous_update=False) for key, value in self._metadata_defaults.items()]
+            for text in self.metadata_text_fields:
+                text.observe(self.foa.on_text_value_change, names="value")
+
+    @property
+    def mds_textfields(self):
+        # This definitely needs another name or other approach
+        # returns the name/description of the text fields and the current values
+        return {field.description: field.value for field in self.metadata_text_fields}
 
     def extend_metadata(self, metadata, filename):
         metadata.setdefault('time metadata', time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()))
         metadata.setdefault('filename', filename)
+        if self._metadata_defaults:
+            for key, item in self.mds_textfields.items():
+                metadata[key] = item
         return metadata
 
     def append_metadata(self, filename):
         # load the metadata from a yaml template
-        with open(self.template_selector.yaml_template, 'rb') as f:
+        with open(self.metadata_app.template_filename, 'rb') as f:
             _metadata = yaml.load(f, Loader=yaml.SafeLoader)
 
         metadata = self.extend_metadata(metadata=_metadata, filename=filename)
@@ -175,6 +210,8 @@ class AutoQuetado:
             yaml.dump(metadata, f)
 
     def callbacks(self):
+        if self._callbacks:
+            return self._callbacks
         # For manual tagging of files.
         def print_filename(filename):
             return print(filename)
@@ -185,63 +222,32 @@ class AutoQuetado:
         for callback in self.callbacks():
             callback(filename)
 
-    def layout(self):
-        return VBox(children=[self.template_selector.dropdown_yaml, self.foa.observer_layout()])
-
-    def gui(self):
-        with self.output:
-            return self.layout()
-
-class AutoQuetadoMetadata(AutoQuetado):
-    # The app should provide some convenience functionalities
-    # such that the most commonly changed variables in the metadata template
-    # can be updated in the GUI.
-
-    def __init__(self, observed_dir=None, suffix='.csv', template_dir='./files/yaml_templates/', template_suffix='.yaml', metadata_defaults=None):
-
-        self._metadata_defaults = metadata_defaults
-
-        # self.output = widgets.Output()
-
-        AutoQuetado.__init__(self, observed_dir=observed_dir, suffix=suffix, template_dir=template_dir, template_suffix=template_suffix)
-
-        self.metadata_text_fields = [widgets.Text(description=key, value=value, continuous_update=False) for key, value in self._metadata_defaults.items()]
-        # Restart observer for any kind of Text widget input change
-        for text in self.metadata_text_fields:
-            text.observe(self.foa.on_text_value_change, names="value")
-
-    @property
-    def mds_textfields(self):
-        # This definitely needs another name or other approach
-        # returns the name/description of the text fields and the current values
-        return {field.description: field.value for field in self.metadata_text_fields}
-
-    def extend_metadata(self, metadata):
-        _metadata = super().extend_metadata(metadata)
-        _metadata['user'] = self.mds_textfields['user']
-        return _metadata
-
     def layout_metadata(self):
         return VBox(children=[field for field in self.metadata_text_fields])
 
-    def metagui(self):
-        # tabs = {'Observer':self.layout, 'Default Metadata': self.layout_metadata}
-        tab = widgets.Tab()
-        # tab.children([[],self.layout_metadata])
-        # tab_contents = ['P0', 'P1', 'P2', 'P3', 'P4']
-        # children = [widgets.Text(description=name) for name in tab_contents]
-        tab.children = [self.layout(), self.layout_metadata()]
+    def layout_simple(self):
+        return VBox(children=[self.metadata_app.dropdown_yaml, self.foa.observer_layout()])
 
+    def metadata_gui(self):
+        tab = widgets.Tab()
+        tab.children = [self.layout_simple(), self.layout_metadata()]
         tab.titles = ['Observer', 'Default Metadata']
+
         with self.output:
             return tab
+
+    def gui(self):
+        if self._metadata_defaults:
+            return self.metadata_gui()
+        with self.output:
+            return self.layout_simple()
+
 
 class AutoQuetadoConverter(AutoQuetado):
 
     def __init__(self, observed_dir, suffix='.csv', template_dir='./files/yaml_templates/', template_suffix='.yaml', metadata_defaults=None, outdir_converted='./files/data_converted/'):
 
-        AutoQuetado.__init__()
-        AutoQuetadoMetadata.__init__(self, observed_dir=observed_dir, suffix=suffix, template_dir=template_dir, template_suffix=template_suffix, metadata_defaults=metadata_defaults)
+        AutoQuetado.__init__(self, observed_dir=observed_dir, suffix=suffix, template_dir=template_dir, template_suffix=template_suffix, metadata_defaults=metadata_defaults)
         self.list_options = ListOptions(list_name='Tagged Files')
         self.outdir_converted = outdir_converted
 
