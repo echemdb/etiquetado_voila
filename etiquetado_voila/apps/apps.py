@@ -93,8 +93,7 @@ class FileObserverApp:
         selectors = VBox(
             children=[self.text_box_folder_path, self.text_box_file_suffix]
         )
-        # buttons = HBox(children=[self.button_start, self.button_stop])
-        # indicator = HBox(children=[self.indicator])
+
         return VBox(children=[selectors, self.button_start_stop])
 
     def gui(self):
