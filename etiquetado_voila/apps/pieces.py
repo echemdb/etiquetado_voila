@@ -5,8 +5,6 @@ import yaml
 import time
 from pathlib import Path
 
-from etiquetado_voila.api.handler import FileObserver
-
 from ipywidgets import widgets, HBox, VBox, Layout
 
 

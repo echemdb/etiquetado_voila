@@ -5,52 +5,47 @@ import yaml
 import time
 from pathlib import Path
 
-from etiquetado_voila.api.handler import FileObserver
 from etiquetado_voila.apps.pieces import ListOptions
 
 from ipywidgets import widgets, HBox, VBox, Layout
-
-import ipyvuetify as v
-
-# Create an ipyvuetify widget (e.g., a button)
+from ipywidgets.widgets.widget import CallbackDispatcher
 
 
 class FileObserverApp:
 
-    def __init__(self, observed_dir=".", suffix=".csv", callbacks=None, output=None):
+    def __init__(self, observed_dir=".", suffix=".csv", output=None):
 
-        self.observed_dir = observed_dir
-        self._suffix = suffix
-        self.callbacks = callbacks
-        self._output = output
+        self._output = output or widgets.Output()
+        self._file_create_handlers = CallbackDispatcher()
 
         # input widgets
         self.text_box_folder_path = widgets.Text(
-            description="folder path", value=self.observed_dir, continuous_update=False,
+            description="folder path", value=observed_dir, continuous_update=False,
         )
         self.text_box_file_suffix = widgets.Text(
-            description="file suffix", value=self._suffix, continuous_update=False
+            description="file suffix", value=suffix, continuous_update=False
         )
-        self.text_box_folder_path.observe(self.on_text_value_change, names="value")
-        self.text_box_file_suffix.observe(self.on_text_value_change, names="value")
+        self.text_box_folder_path.observe(self.on_text_value_changed, names="value")
+        self.text_box_file_suffix.observe(self.on_text_value_changed, names="value")
 
         # Homebrew widgets
-        self.fileobserver = FileObserver(
-            observed_dir=self.observed_dir,
-            suffix=self._suffix,
-            callbacks=self.callbacks,
-        )
+        self.observer = None
 
-        # # demo ipyvuetifiy button
-        # # self.button_start = v.Btn(color='primary', children=["Start watching"])
-        # # self.button_start.on_event('click', self.on_start)
         self.button_start_stop = widgets.Button(description="Stop watching")
         self.button_start_stop.style.button_color = "red"
         self.button_start_stop.style.text_color = "black"
-        self.button_start_stop.on_click(self.on_start_stop)
+        self.button_start_stop.on_click(self.toggle_start_stop)
 
-        # output
-        self._output = output or widgets.Output()
+    def on_file_create(self, callback, remove=False):
+        """
+        """
+        self._file_create_handlers.register_callback(callback, remove=remove)
+
+    def file_create(self, filename):
+        """
+        """
+        if Path(filename).suffix == self.suffix: # suffix of the textbox
+            self._file_create_handlers(self, filename)
 
     @property
     def output(self):
@@ -60,34 +55,55 @@ class FileObserverApp:
     def suffix(self):
         return self.text_box_file_suffix.value
 
-    def on_text_value_change(self, change):
-        if self.fileobserver.observer:
-            if self.fileobserver.observer.is_alive():
-                self.fileobserver._suffix = self.text_box_file_suffix.value
-                self.restart()
+    @property
+    def observed_dir(self):
+        return self.text_box_folder_path.value
 
-    def on_stop(self, *args):
-        self.fileobserver.stop()
-        self.button_start_stop.style.button_color = "red"
-        self.button_start_stop.style.text_color = "black"
-        self.button_start_stop.description = "Start watching"
+    def on_text_value_changed(self, change):
+        self.stop() and self.start()
 
-    def on_start(self, *args):
-        self.fileobserver.start()
+    def start(self):
+        if self.observer is not None:
+            return False
+
+        from watchdog.observers import Observer
+        self.observer = Observer()
+
+        from etiquetado_voila.api.handler import FileCreationHandler
+
+        self.observer.schedule(
+            FileCreationHandler(app=self),
+            path=self.observed_dir,
+            recursive=False,)
+
         self.button_start_stop.style.button_color = "lightgreen"
         self.button_start_stop.description = "Watching"
         self.button_start_stop.description = "Stop watching"
+        self.observer.start()
+        print(
+            f"start watching files with suffix '{self.suffix}' in folder '{self.observed_dir}'."
+        )
+        return True
 
-    def on_start_stop(self, *args):
-        if self.fileobserver.observer:
-            if self.fileobserver.observer.is_alive():
-                self.on_stop()
-        else:
-            self.on_start()
+    def stop(self):
+        if self.observer is None:
+            print("observer not running")
+            return False
+        self.observer.stop()
+        self.observer.join()
+        self.observer = None
+        self.button_start_stop.style.button_color = "red"
+        self.button_start_stop.style.text_color = "black"
+        self.button_start_stop.description = "Start watching"
+        print("Stopped watching")
+        return True
+
+    def toggle_start_stop(self, *args):
+        return self.stop() or self.start()
 
     def restart(self):
-        self.on_stop()
-        self.on_start()
+        self.stop()
+        self.start()
 
     def observer_layout(self):
         selectors = VBox(
@@ -168,30 +184,31 @@ class AutoQuetado:
         update_metadata=None, # method that changes metadata received from YAML or adds new metadata
         variable_metadata=None,
         template_suffix=".yaml",
-        callbacks=None,
     ):
 
         self._template_dir = template_dir
         self._template_suffix = template_suffix
 
-        self._observed_dir = observed_dir
-        self._suffix = suffix
-        self._callbacks = callbacks
+
         self._update_metadata = update_metadata
         self._variable_metadata = variable_metadata
         self.output = widgets.Output()
 
         self.foa = FileObserverApp(
-            observed_dir=self._observed_dir,
-            suffix=self._suffix,
-            callbacks=callbacks or self.callbacks(),
+            observed_dir=observed_dir,
+            suffix=suffix,
+            output=self.output
         )
+
+        self.on_file_created(self.tag_data)
+        # self.on_file_created(lambda _, filename: print(filename))
+
         self.metadata_app = MetadataApp(
             template_dir=self._template_dir, template_suffix=self._template_suffix
         )
 
         self.metadata_app.dropdown_yaml.observe(
-            self.foa.on_text_value_change, names="value"
+            self.foa.on_text_value_changed, names="value"
         )
 
         self.metadata_text_fields = None
@@ -202,7 +219,23 @@ class AutoQuetado:
                 for key, value in self._variable_metadata.items()
             ]
             for text in self.metadata_text_fields:
-                text.observe(self.foa.on_text_value_change, names="value")
+                text.observe(self.foa.on_text_value_changed, names="value")
+
+    def on_file_created(self, *args, **kwargs):
+        return self.foa.on_file_create(*args, **kwargs)
+
+
+    def tag_data(self, _, filename):
+        # load the metadata from a yaml template
+        with open(self.metadata_app.template_filename, "rb") as f:
+            _metadata = yaml.load(f, Loader=yaml.SafeLoader)
+
+        metadata = self.update_metadata(metadata=_metadata, filename=filename)
+
+        outyaml = Path(filename).with_suffix(f"{self.foa.suffix}.yaml")
+
+        with open(outyaml, "w", encoding="utf-8") as f:
+            yaml.dump(metadata, f)
 
     @property
     def variable_metadata(self):
@@ -222,31 +255,6 @@ class AutoQuetado:
                 metadata[key] = item
         return metadata
 
-    def tag_data(self, filename):
-        # load the metadata from a yaml template
-        with open(self.metadata_app.template_filename, "rb") as f:
-            _metadata = yaml.load(f, Loader=yaml.SafeLoader)
-
-        metadata = self.update_metadata(metadata=_metadata, filename=filename)
-
-        outyaml = Path(filename).with_suffix(f"{self.foa.suffix}.yaml")
-
-        with open(outyaml, "w", encoding="utf-8") as f:
-            yaml.dump(metadata, f)
-
-    def callbacks(self):
-        if self._callbacks:
-            return self._callbacks
-
-        # For manual tagging of files.
-        def print_filename(filename):
-            return print(filename)
-
-        return [print_filename, self.tag_data]
-
-    def tag(self, filename):
-        for callback in self.callbacks():
-            callback(filename)
 
     def layout_metadata(self):
         return VBox(children=[field for field in self.metadata_text_fields])
@@ -260,6 +268,8 @@ class AutoQuetado:
         tab = widgets.Tab()
         tab.children = [self.layout_observer()]
         tab.titles = ["Observer"]
+        with self.output:
+            return tab
 
     def metadata_gui(self):
         tab = widgets.Tab()
@@ -288,10 +298,7 @@ class AutoQuetadoConverter(AutoQuetado):
         variable_metadata=None,
         converter = None,
         outdir_converted="./files/data_converted/",
-        callbacks=None,
     ):
-
-        self._callbacks = callbacks
         self._converter = converter
         self.list_options = ListOptions(list_name="Tagged Files")
 
@@ -309,8 +316,13 @@ class AutoQuetadoConverter(AutoQuetado):
         self.app_output = widgets.Output()
         self.output = widgets.Output()
 
+        self.on_file_created(self.add_tagged_file_option)
+
         self.button_convert_files = widgets.Button(description="Export & convert selected files")
         self.button_convert_files.on_click(self.on_convert_files)
+
+    def add_tagged_file_option(self, _, filename):
+        return self.list_options.add_option(filename)
 
     def base_converter(self, filename, metadata_suffix, outdir):
         from echemdbconverters.csvloader import CSVloader
@@ -339,17 +351,6 @@ class AutoQuetadoConverter(AutoQuetado):
         # otherwise the above loop will break
         for filename in self.list_options.option_selector.value:
             self.list_options.remove_option(filename)
-
-    def callbacks(self):
-        if self._callbacks:
-            return self._callbacks
-
-        # For manual tagging of files.
-        def print_filename(filename):
-            with self.output:
-                return print(filename)
-
-        return [print_filename, self.tag_data, self.list_options.add_option]
 
     def layout_converter(self):
         return VBox(
