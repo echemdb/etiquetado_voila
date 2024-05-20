@@ -123,6 +123,8 @@ class MetadataApp:
         self,
         template_dir,
         template_suffix=".yaml",
+        variable_metadata=None,
+        update_metadata=None, #  does nothing
     ):
 
         self._template_dir = template_dir
@@ -135,6 +137,19 @@ class MetadataApp:
         )
 
         self.output = widgets.Output()
+
+        self.metadata_text_fields = None
+
+        if variable_metadata:
+            self.metadata_text_fields = [
+                widgets.Text(description=key, value=value, continuous_update=False)
+                for key, value in variable_metadata.items()
+            ]
+
+    @property
+    def variable_metadata(self):
+        # returns the name/description of the text fields and the current values
+        return self.metadata_text_fields or {text_field.description: text_field.value for text_field in self.metadata_text_fields}
 
     @property
     def template_dir(self):
@@ -151,16 +166,16 @@ class MetadataApp:
         return self._template_suffix
 
     @property
-    def _metadata(self):
+    def template_metadata(self):
         with open(self.template_filename, "rb") as f:
             metadata = yaml.load(f, Loader=yaml.SafeLoader)
 
         return metadata
 
     def metadata(self):
-        _metadata = self._metadata
-        # update _metadata with fields from other schema
-        return _metadata
+        template_metadata = self.template_metadata
+        # update template_metadata with fields from other schema
+        return template_metadata
 
     def store_metadata(self, outyaml):
         # outyaml = Path(self.filename).with_suffix(f'{self.foa.suffix}.yaml')
@@ -185,13 +200,13 @@ class AutoQuetado:
         variable_metadata=None,
         template_suffix=".yaml",
     ):
+        self._update_metadata = update_metadata
 
         self._template_dir = template_dir
         self._template_suffix = template_suffix
 
-
-        self._update_metadata = update_metadata
         self._variable_metadata = variable_metadata
+
         self.output = widgets.Output()
 
         self.foa = FileObserverApp(
@@ -204,43 +219,30 @@ class AutoQuetado:
         # self.on_file_created(lambda _, filename: print(filename))
 
         self.metadata_app = MetadataApp(
-            template_dir=self._template_dir, template_suffix=self._template_suffix
+            template_dir=self._template_dir, template_suffix=self._template_suffix, update_metadata=update_metadata, variable_metadata=variable_metadata
         )
 
         self.metadata_app.dropdown_yaml.observe(
             self.foa.on_text_value_changed, names="value"
         )
-
-        self.metadata_text_fields = None
-
         if self._variable_metadata:
-            self.metadata_text_fields = [
-                widgets.Text(description=key, value=value, continuous_update=False)
-                for key, value in self._variable_metadata.items()
-            ]
-            for text in self.metadata_text_fields:
+            for text in self.metadata_app.metadata_text_fields:
                 text.observe(self.foa.on_text_value_changed, names="value")
 
     def on_file_created(self, *args, **kwargs):
         return self.foa.on_file_create(*args, **kwargs)
 
-
     def tag_data(self, _, filename):
         # load the metadata from a yaml template
         with open(self.metadata_app.template_filename, "rb") as f:
-            _metadata = yaml.load(f, Loader=yaml.SafeLoader)
+            template_metadata = yaml.load(f, Loader=yaml.SafeLoader)
 
-        metadata = self.update_metadata(metadata=_metadata, filename=filename)
+        metadata = self.update_metadata(metadata=template_metadata, filename=filename)
 
         outyaml = Path(filename).with_suffix(f"{self.foa.suffix}.yaml")
 
         with open(outyaml, "w", encoding="utf-8") as f:
             yaml.dump(metadata, f)
-
-    @property
-    def variable_metadata(self):
-        # returns the name/description of the text fields and the current values
-        return {text_field.description: text_field.value for text_field in self.metadata_text_fields}
 
     def update_metadata(self, metadata, filename):
         if self._update_metadata:
@@ -251,13 +253,13 @@ class AutoQuetado:
         )
         metadata.setdefault("filename", filename)
         if self._variable_metadata:
-            for key, item in self.variable_metadata.items():
+            for key, item in self.metadata_app.variable_metadata.items():
                 metadata[key] = item
         return metadata
 
 
     def layout_metadata(self):
-        return VBox(children=[field for field in self.metadata_text_fields])
+        return VBox(children=[field for field in self.metadata_app.metadata_text_fields])
 
     def layout_observer(self):
         return VBox(
@@ -280,7 +282,7 @@ class AutoQuetado:
             return tab
 
     def gui(self):
-        if self.metadata_text_fields:
+        if self.metadata_app.metadata_text_fields:
             return self.metadata_gui()
         with self.output:
             return self.basic_gui()
