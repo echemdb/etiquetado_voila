@@ -9,6 +9,7 @@ class FileObserver:
 
         self._output = output or widgets.Output()
         self._file_create_handlers = CallbackDispatcher()
+        self._file_delete_handlers = CallbackDispatcher()
 
         # input widgets
         self.text_box_folder_path = widgets.Text(
@@ -38,6 +39,17 @@ class FileObserver:
         """
         if Path(filename).suffix == self.suffix: # suffix of the textbox
             self._file_create_handlers(self, filename)
+
+    def on_file_delete(self, callback, remove=False):
+        """
+        """
+        self._file_delete_handlers.register_callback(callback, remove=remove)
+
+    def file_deleted(self, filename):
+        """
+        """
+        if Path(filename).suffix == self.suffix: # suffix of the textbox
+            self._file_delete_handlers(self, filename)
 
     @property
     def output(self):

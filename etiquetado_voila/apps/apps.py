@@ -32,13 +32,17 @@ class MetadataApp:
 
         self.template_observer = FileObserver(observed_dir=self.template_dir, suffix=self.template_suffix)
         self.template_observer.start()
-        self.on_file_created(self.update_template_list)
+        self.on_file_created(self.add_template)
+        self.on_file_deleted(self.remove_template)
         #self.text_box_folder_path.observe(self.template_observer.on_text_value_changed, names="value")
 
         self.output = widgets.Output()
 
     def on_file_created(self, *args, **kwargs):
         return self.template_observer.on_file_create(*args, **kwargs)
+
+    def on_file_deleted(self, *args, **kwargs):
+        return self.template_observer.on_file_delete(*args, **kwargs)
 
     @property
     def template_dir(self):
@@ -61,10 +65,15 @@ class MetadataApp:
 
         return metadata
 
-    def update_template_list(self, _, filename):
+    def add_template(self, _, filename):
         # self.dropdown_yaml.options = glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))
         self.dropdown_yaml.options = [PurePath(file) for file in glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))]
         self.dropdown_yaml.value = [option for option in self.dropdown_yaml.options if Path(filename).stem in str(option)][0]
+
+    def remove_template(self, _, filename):
+        # self.dropdown_yaml.options = glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))
+        self.dropdown_yaml.options = [PurePath(file) for file in glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))]
+        # self.dropdown_yaml.value = [option for option in self.dropdown_yaml.options if Path(filename).stem in str(option)][0]
 
 class AutoQuetado:
 

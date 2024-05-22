@@ -12,3 +12,6 @@ class FileCreationHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         self.app.file_create(event.src_path)
+
+    def on_deleted(self, event):
+        self.app.file_deleted(event.src_path)
