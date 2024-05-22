@@ -118,13 +118,10 @@ class FileObserverApp:
 
 
 class MetadataApp:
-    # This has to be cleaned and seems useless...
     def __init__(
         self,
         template_dir,
-        template_suffix=".yaml",
-        variable_metadata=None,
-        update_metadata=None, #  does nothing
+        template_suffix=".yaml"
     ):
 
         self._template_dir = template_dir
@@ -137,19 +134,6 @@ class MetadataApp:
         )
 
         self.output = widgets.Output()
-
-        self.metadata_text_fields = None
-
-        if variable_metadata:
-            self.metadata_text_fields = [
-                widgets.Text(description=key, value=value, continuous_update=False)
-                for key, value in variable_metadata.items()
-            ]
-
-    @property
-    def variable_metadata(self):
-        # returns the name/description of the text fields and the current values
-        return self.metadata_text_fields or {text_field.description: text_field.value for text_field in self.metadata_text_fields}
 
     @property
     def template_dir(self):
@@ -172,22 +156,10 @@ class MetadataApp:
 
         return metadata
 
-    def metadata(self):
-        template_metadata = self.template_metadata
-        # update template_metadata with fields from other schema
-        return template_metadata
-
-    def store_metadata(self, outyaml):
-        # outyaml = Path(self.filename).with_suffix(f'{self.foa.suffix}.yaml')
-        # outyaml = Path(self.filename).with_suffix(self.output_suffix)
-        with open(outyaml, "w", encoding="utf-8") as f:
-            yaml.dump(self.metadata, f)
-
     def update_template_list(self):
         # Update the dropdown list when new templates
         # are created in the templates folder
         pass
-
 
 class AutoQuetado:
 
@@ -197,15 +169,16 @@ class AutoQuetado:
         suffix,
         template_dir,
         update_metadata=None, # method that changes metadata received from YAML or adds new metadata
-        variable_metadata=None,
         template_suffix=".yaml",
     ):
+        """
+        `update_metadata must be a method with arguments metadata and filename,
+        such as `update_metadata(metadata, filename)`
+        """
         self._update_metadata = update_metadata
 
         self._template_dir = template_dir
         self._template_suffix = template_suffix
-
-        self._variable_metadata = variable_metadata
 
         self.output = widgets.Output()
 
@@ -219,23 +192,22 @@ class AutoQuetado:
         # self.on_file_created(lambda _, filename: print(filename))
 
         self.metadata_app = MetadataApp(
-            template_dir=self._template_dir, template_suffix=self._template_suffix, update_metadata=update_metadata, variable_metadata=variable_metadata
+            template_dir=self._template_dir, template_suffix=self._template_suffix
         )
 
         self.metadata_app.dropdown_yaml.observe(
             self.foa.on_text_value_changed, names="value"
         )
-        if self._variable_metadata:
-            for text in self.metadata_app.metadata_text_fields:
-                text.observe(self.foa.on_text_value_changed, names="value")
 
     def on_file_created(self, *args, **kwargs):
         return self.foa.on_file_create(*args, **kwargs)
 
     def tag_data(self, _, filename):
         # load the metadata from a yaml template
-        with open(self.metadata_app.template_filename, "rb") as f:
-            template_metadata = yaml.load(f, Loader=yaml.SafeLoader)
+        # with open(self.metadata_app.template_filename, "rb") as f:
+        #     template_metadata = yaml.load(f, Loader=yaml.SafeLoader)
+
+        template_metadata = self.metadata_app.template_metadata
 
         metadata = self.update_metadata(metadata=template_metadata, filename=filename)
 
@@ -251,42 +223,20 @@ class AutoQuetado:
         metadata.setdefault(
             "time metadata", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         )
-        metadata.setdefault("filename", filename)
-        if self._variable_metadata:
-            for key, item in self.metadata_app.variable_metadata.items():
-                metadata[key] = item
+
         return metadata
-
-
-    def layout_metadata(self):
-        return VBox(children=[field for field in self.metadata_app.metadata_text_fields])
 
     def layout_observer(self):
         return VBox(
             children=[self.metadata_app.dropdown_yaml, self.foa.observer_layout()]
         )
 
-    def basic_gui(self):
+    def gui(self):
         tab = widgets.Tab()
         tab.children = [self.layout_observer()]
         tab.titles = ["Observer"]
         with self.output:
             return tab
-
-    def metadata_gui(self):
-        tab = widgets.Tab()
-        tab.children = [self.layout_observer(), self.layout_metadata()]
-        tab.titles = ["Observer", "Variable Metadata"]
-
-        with self.output:
-            return tab
-
-    def gui(self):
-        if self.metadata_app.metadata_text_fields:
-            return self.metadata_gui()
-        with self.output:
-            return self.basic_gui()
-
 
 class AutoQuetadoConverter(AutoQuetado):
 
@@ -297,7 +247,6 @@ class AutoQuetadoConverter(AutoQuetado):
         template_dir="./files/yaml_templates/",
         template_suffix=".yaml",
         update_metadata=None,
-        variable_metadata=None,
         converter = None,
         outdir_converted="./files/data_converted/",
     ):
@@ -311,7 +260,6 @@ class AutoQuetadoConverter(AutoQuetado):
             template_dir=template_dir,
             template_suffix=template_suffix,
             update_metadata=update_metadata,
-            variable_metadata=variable_metadata,
         )
         self.outdir_converted = outdir_converted
 
@@ -360,20 +308,6 @@ class AutoQuetadoConverter(AutoQuetado):
         )
 
     def gui(self):
-        if self._variable_metadata:
-            tab = widgets.Tab()
-
-            tab.children = [
-                self.layout_observer(),
-                self.layout_metadata(),
-                self.layout_converter(),
-            ]
-
-            tab.titles = ["Observer", "Variable Metadata", "Convert Files"]
-            layout = VBox(children=[tab, self.output])
-            with self.app_output:
-                return layout
-
         tab = widgets.Tab()
 
         tab.children = [
