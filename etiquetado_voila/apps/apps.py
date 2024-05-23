@@ -3,163 +3,16 @@ import os
 import yaml
 
 import time
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from etiquetado_voila.apps.pieces import ListOptions
 
 from ipywidgets import widgets, HBox, VBox, Layout
-from ipywidgets.widgets.widget import CallbackDispatcher
+
+from etiquetado_voila.apps.fileobserver import FileObserver
+from etiquetado_voila.apps.metadata import MetadataApp
 
 
-class FileObserverApp:
-
-    def __init__(self, observed_dir=".", suffix=".csv", output=None):
-
-        self._output = output or widgets.Output()
-        self._file_create_handlers = CallbackDispatcher()
-
-        # input widgets
-        self.text_box_folder_path = widgets.Text(
-            description="folder path", value=observed_dir, continuous_update=False,
-        )
-        self.text_box_file_suffix = widgets.Text(
-            description="file suffix", value=suffix, continuous_update=False
-        )
-        self.text_box_folder_path.observe(self.on_text_value_changed, names="value")
-        self.text_box_file_suffix.observe(self.on_text_value_changed, names="value")
-
-        # Homebrew widgets
-        self.observer = None
-
-        self.button_start_stop = widgets.Button(description="Stop watching")
-        self.button_start_stop.style.button_color = "red"
-        self.button_start_stop.style.text_color = "black"
-        self.button_start_stop.on_click(self.toggle_start_stop)
-
-    def on_file_create(self, callback, remove=False):
-        """
-        """
-        self._file_create_handlers.register_callback(callback, remove=remove)
-
-    def file_create(self, filename):
-        """
-        """
-        if Path(filename).suffix == self.suffix: # suffix of the textbox
-            self._file_create_handlers(self, filename)
-
-    @property
-    def output(self):
-        return self._output
-
-    @property
-    def suffix(self):
-        return self.text_box_file_suffix.value
-
-    @property
-    def observed_dir(self):
-        return self.text_box_folder_path.value
-
-    def on_text_value_changed(self, change):
-        self.stop() and self.start()
-
-    def start(self):
-        if self.observer is not None:
-            return False
-
-        from watchdog.observers import Observer
-        self.observer = Observer()
-
-        from etiquetado_voila.api.handler import FileCreationHandler
-
-        self.observer.schedule(
-            FileCreationHandler(app=self),
-            path=self.observed_dir,
-            recursive=False,)
-
-        self.button_start_stop.style.button_color = "lightgreen"
-        self.button_start_stop.description = "Watching"
-        self.button_start_stop.description = "Stop watching"
-        self.observer.start()
-        print(
-            f"start watching files with suffix '{self.suffix}' in folder '{self.observed_dir}'."
-        )
-        return True
-
-    def stop(self):
-        if self.observer is None:
-            print("observer not running")
-            return False
-        self.observer.stop()
-        self.observer.join()
-        self.observer = None
-        self.button_start_stop.style.button_color = "red"
-        self.button_start_stop.style.text_color = "black"
-        self.button_start_stop.description = "Start watching"
-        print("Stopped watching")
-        return True
-
-    def toggle_start_stop(self, *args):
-        return self.stop() or self.start()
-
-    def restart(self):
-        self.stop()
-        self.start()
-
-    def observer_layout(self):
-        selectors = VBox(
-            children=[self.text_box_folder_path, self.text_box_file_suffix]
-        )
-
-        return VBox(children=[selectors, self.button_start_stop])
-
-    def gui(self):
-        with self.output:
-            return self.observer_layout()
-
-
-class MetadataApp:
-    def __init__(
-        self,
-        template_dir,
-        template_suffix=".yaml"
-    ):
-
-        self._template_dir = template_dir
-        self._template_suffix = template_suffix
-
-        self.yaml_templates = glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))
-        self.dropdown_yaml = widgets.Dropdown(
-            description="Yaml templates", options=self.yaml_templates,
-            layout=Layout(width="400px", flex="flex-grow")
-        )
-
-        self.output = widgets.Output()
-
-    @property
-    def template_dir(self):
-        # might ass well be store in a widget
-        return self._template_dir
-
-    @property
-    def template_filename(self):
-        return self.dropdown_yaml.value
-
-    @property
-    def template_suffix(self):
-        # might as well be stored in a widget
-        return self._template_suffix
-
-    @property
-    def template_metadata(self):
-        with open(self.template_filename, "rb") as f:
-            metadata = yaml.load(f, Loader=yaml.SafeLoader)
-
-        return metadata
-
-    def update_template_list(self):
-        # Update the dropdown list when new templates
-        # are created in the templates folder
-        pass
 
 class AutoQuetado:
 
@@ -182,7 +35,7 @@ class AutoQuetado:
 
         self.output = widgets.Output()
 
-        self.foa = FileObserverApp(
+        self.foa = FileObserver(
             observed_dir=observed_dir,
             suffix=suffix,
             output=self.output
