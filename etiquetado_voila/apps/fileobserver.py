@@ -85,7 +85,7 @@ class FileObserver:
         self.button_start_stop.description = "Stop watching"
         self.observer.start()
         print(
-            f"start watching files with suffix '{self.suffix}' in folder '{self.observed_dir}'."
+            f"Watching files with suffix '{self.suffix}' in folder '{self.observed_dir}'."
         )
         return True
 

@@ -7,10 +7,17 @@ class FileCreationHandler(FileSystemEventHandler):
         self.app = app
 
     def on_created(self, event):
-        self.app.file_create(event.src_path)
+        try:
+            self.app.file_create(event.src_path)
+        except AttributeError:
+            pass
 
     def on_deleted(self, event):
-        self.app.file_deleted(event.src_path)
+        try:
+            self.app.file_deleted(event.src_path)
+        except AttributeError:
+            pass
+
 
 class FileDeletionHandler(FileSystemEventHandler):
 

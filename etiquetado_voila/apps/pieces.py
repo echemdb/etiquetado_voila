@@ -38,9 +38,10 @@ class ListOptions:
 
     def add_option(self, option):
         new_options = [item for item in self.option_selector.options]
-        if new_options:
-            if not option in new_options:
-                new_options.append(option)
+        if not new_options:
+            new_options.append(option)
+        if not option in new_options:
+            new_options.append(option)
         self.reset_options(new_options)
 
     def remove_option(self, option):

@@ -23,8 +23,7 @@ class MetadataApp:
         self._template_suffix = template_suffix
 
         self.yaml_templates = [PurePath(file) for file in glob.glob(os.path.join(self._template_dir, f"**{self.template_suffix}"))]
-        # self.yaml_templates = glob.glob(PurePath(self._template_dir).joinpath(f"**{self.template_suffix}"))
-        # self.yaml_templates = [str(file) for file in glob.glob(PurePath(self._template_dir).joinpath(f"**{self.template_suffix}"))]
+
         self.dropdown_yaml = widgets.Dropdown(
             description="Yaml templates", options=self.yaml_templates,
             layout=Layout(width="400px", flex="flex-grow")
